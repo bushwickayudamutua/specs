@@ -536,7 +536,278 @@ Kitchen: description
 
 ---
 
-## 9. Glossary / References
+## 9. Feature Suggestions
+
+The following features could improve system efficiency, user experience, and operational scalability. These are suggestions for future consideration, not requirements for the current V2 implementation.
+
+### 9.1 Automation & Efficiency
+
+#### Automated Outreach Targeting
+**Problem:** Admins manually create filtered views for each text blast.
+**Suggestion:** Auto-generate target lists based on:
+- Current inventory levels
+- Volunteer language availability for upcoming distro
+- Recipients who haven't attended in X days
+- Request age prioritization
+
+**Value:** Reduces admin prep time, ensures consistent targeting criteria, minimizes human error.
+
+#### Automated Appointment Booking
+**Problem:** Volunteers manually respond to each confirmation and update Airtable.
+**Suggestion:** Self-service booking system where recipients:
+- Receive text with available time slots
+- Reply with slot number to auto-book
+- Get confirmation with appointment details
+
+**Value:** Reduces volunteer workload during outreach shifts, faster booking turnaround.
+
+#### Smart Follow-Up Sequences
+**Problem:** 3x text, 3x call, email sequence requires manual tracking.
+**Suggestion:** Automated escalation workflow:
+- Auto-send follow-up texts on schedule
+- Flag for phone call after text failures
+- Auto-email after call failures
+- Track attempts per household
+
+**Value:** Consistent follow-up without volunteer tracking burden.
+
+#### Language-Aware Routing
+**Problem:** Manual matching of volunteer languages to recipient needs.
+**Suggestion:** System matches:
+- Volunteer language skills to recipient preferences
+- Auto-assign outreach based on language match
+- Alert when no language match available
+
+**Value:** Better recipient experience, more efficient volunteer utilization.
+
+---
+
+### 9.2 Inventory Management
+
+#### Real-Time Inventory Tracking
+**Problem:** Post-distro inventory is informal text reporting.
+**Suggestion:** Digital inventory system with:
+- Pre-distro stock counts
+- Real-time deduction during check-in
+- Low-stock alerts
+- Reorder suggestions
+
+**Value:** Better distro planning, prevents over-promising items not in stock.
+
+#### Inventory-Aware Request Matching
+**Problem:** Admins manually match available supplies to request types.
+**Suggestion:** System auto-filters outreach to:
+- Only contact households requesting available items
+- Prioritize items with excess inventory
+- Defer low-stock item requests
+
+**Value:** Higher fulfillment rate per distro, reduces partial fulfillments.
+
+---
+
+### 9.3 Recipient Experience
+
+#### Request Status Portal
+**Problem:** Recipients have no visibility into request status.
+**Suggestion:** Simple web/SMS interface showing:
+- Current request status (Open/Scheduled/Fulfilled)
+- Position in queue
+- Estimated wait time
+- Next distro dates
+
+**Value:** Reduces inquiry volume, builds trust through transparency.
+
+#### Appointment Reminders
+**Problem:** No automated reminders before appointments.
+**Suggestion:** Send reminders:
+- 24 hours before appointment
+- 2 hours before appointment
+- Include location, time, what to bring
+
+**Value:** Reduces no-show rate, improves distro efficiency.
+
+#### Multi-Channel Notifications
+**Problem:** SMS-only communication limits reach.
+**Suggestion:** Support multiple channels:
+- SMS (primary)
+- Email (backup)
+- WhatsApp (for international numbers)
+- Push notifications (future app)
+
+**Value:** Better reach, accommodates communication preferences.
+
+#### Configurable Expiration Windows
+**Problem:** Fixed 14-day expiration may not suit all request types.
+**Suggestion:** Per-request-type expiration:
+- Urgent items (diapers, pads): 7 days
+- Standard goods: 14 days
+- Furniture/large items: 30-60 days
+- Social services: 30 days
+
+**Value:** Better matches urgency to item availability patterns.
+
+---
+
+### 9.4 Volunteer Management
+
+#### Shift Scheduling System
+**Problem:** Manual coordination for distro staffing.
+**Suggestion:** Volunteer scheduling with:
+- Available shift slots per distro
+- Self-service sign-up
+- Language skill matching
+- Automated reminders
+- No-show tracking
+
+**Value:** Easier coordination, better language coverage.
+
+#### Volunteer Onboarding Workflow
+**Problem:** Onboarding process unclear.
+**Suggestion:** Structured onboarding:
+- Automated welcome sequence
+- Training module completion tracking
+- Shadowing assignment
+- Probation period management
+- Skill certification
+
+**Value:** Consistent onboarding, faster time-to-productivity.
+
+#### Access Management
+**Problem:** Volunteer access revocation timeline unclear.
+**Suggestion:** Automated access lifecycle:
+- Inactivity alerts (30/60/90 days)
+- Auto-revoke after X days inactive
+- Re-onboarding for returning volunteers
+- Audit trail for access changes
+
+**Value:** Security, compliance, clean volunteer roster.
+
+---
+
+### 9.5 Data Quality & Privacy
+
+#### Phone Number Validation
+**Problem:** Invalid/international numbers cause outreach failures.
+**Suggestion:** At intake:
+- Format validation
+- Carrier lookup
+- International number flagging
+- Duplicate detection
+
+**Value:** Cleaner data, fewer failed outreach attempts.
+
+#### Household Deduplication Tools
+**Problem:** Multiple phone numbers create duplicate households.
+**Suggestion:** Admin tools for:
+- Duplicate detection reports
+- Merge household records
+- Link multiple phones to one household
+- Audit trail for merges
+
+**Value:** Accurate household counts, prevents double-fulfillment.
+
+#### Configurable Data Retention
+**Problem:** No clear policy for old data.
+**Suggestion:** Automated data lifecycle:
+- Archive fulfilled requests after X days
+- Anonymize PII after retention period
+- Configurable per data type
+- Compliance reporting
+
+**Value:** Privacy compliance, database performance.
+
+---
+
+### 9.6 Reporting & Analytics
+
+#### Operations Dashboard
+**Problem:** Metrics require manual aggregation.
+**Suggestion:** Real-time dashboard showing:
+- Open requests by type
+- Fulfillment rate trends
+- No-show rates
+- Inventory levels
+- Volunteer activity
+
+**Value:** Data-driven decisions, early problem detection.
+
+#### Distribution Planning Reports
+**Problem:** Manual analysis for distro planning.
+**Suggestion:** Auto-generated reports:
+- Optimal target list size for capacity
+- Language coverage gaps
+- Geographic distribution
+- Historical attendance patterns
+
+**Value:** Better planning, improved efficiency.
+
+#### Impact Reporting
+**Problem:** Limited visibility into program impact.
+**Suggestion:** Generate reports for:
+- Households served over time
+- Requests fulfilled by type
+- Average time-to-fulfillment
+- Community reach by neighborhood
+
+**Value:** Fundraising support, stakeholder communication.
+
+---
+
+### 9.7 Integration & Infrastructure
+
+#### API for External Systems
+**Problem:** Limited integration capabilities.
+**Suggestion:** REST API supporting:
+- Read/write for all tables
+- Webhook subscriptions
+- Rate limiting
+- Authentication/authorization
+
+**Value:** Enables partner integrations, custom tooling.
+
+#### Mobile Check-In App
+**Problem:** Airtable interface not optimized for mobile.
+**Suggestion:** Dedicated mobile app for:
+- Phone number lookup
+- Request display
+- Quick fulfillment marking
+- Offline support
+
+**Value:** Faster check-ins, works in low-connectivity venues.
+
+#### Backup & Disaster Recovery
+**Problem:** Single point of failure in current system.
+**Suggestion:** Implement:
+- Daily automated backups
+- Point-in-time recovery
+- Failover procedures
+- Recovery testing schedule
+
+**Value:** Data protection, operational continuity.
+
+---
+
+### 9.8 Priority Recommendations
+
+Based on impact and feasibility, suggested implementation priority:
+
+| Priority | Feature | Impact | Effort |
+|----------|---------|--------|--------|
+| **P0** | Appointment Reminders | High - reduces no-shows | Low |
+| **P0** | Phone Number Validation | High - improves data quality | Low |
+| **P1** | Automated Outreach Targeting | High - saves admin time | Medium |
+| **P1** | Real-Time Inventory Tracking | High - better planning | Medium |
+| **P1** | Operations Dashboard | High - visibility | Medium |
+| **P2** | Automated Appointment Booking | Medium - reduces volunteer load | Medium |
+| **P2** | Volunteer Shift Scheduling | Medium - easier coordination | Medium |
+| **P2** | Household Deduplication Tools | Medium - data quality | Medium |
+| **P3** | Request Status Portal | Medium - recipient experience | High |
+| **P3** | Mobile Check-In App | Medium - faster check-ins | High |
+| **P3** | Language-Aware Routing | Medium - better matching | High |
+
+---
+
+## 10. Glossary / References
 
 ### Terms
 - **BAM** - Bushwick Ayuda Mutua
