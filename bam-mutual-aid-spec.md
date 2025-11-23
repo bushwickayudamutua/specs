@@ -8,7 +8,6 @@ The current BAM mutual aid system has technical debt, relies on manual intervent
 ### Reference Documents
 - **Current System Documentation:** [background-current-system.md](./background-current-system.md)
 - **Existing Outreach Flowchart:** [bam-outreach-flowchart.png](./bam-outreach-flowchart.png)
-- **Intake Forms:** [forms/](./forms/)
 
 ### Stakeholders
 - **Recipients**: Community members requesting goods/services
@@ -558,4 +557,3 @@ Kitchen: description
 
 ### Links
 - **Current System Background:** [background-current-system.md](./background-current-system.md)
-- **Intake Forms:** [forms/](./forms/)
