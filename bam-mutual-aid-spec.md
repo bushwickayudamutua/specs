@@ -60,7 +60,6 @@ The current BAM mutual aid system has technical debt, relies on manual intervent
 
 | Technical Functionality | Value | Tradeoffs |
 |------------------------|-------|-----------|
-| Intake deduplication | Prevents duplicate requests per household | Phone number as unique ID may miss edge cases |
 | Request auto-expiration | Keeps queue fresh and relevant | May lose valid long-term requests |
 | Automated outreach retry logic | Consistent follow-up process | Requires 3x text, call, email sequence |
 
@@ -221,20 +220,12 @@ Raw form intake data.
 | Function | Schedule | Purpose |
 |----------|----------|---------|
 | `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON |
-| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views |
-| `UpdateMailjetLists` | Daily | Syncs contacts to email lists |
-| `SnapshotAirtableViews` | Daily | Backs up modified records to storage |
 
 ### Web-Triggered Functions
 
 | Function | Purpose |
 |----------|---------|
-| `send_dialpad_sms` | Sends SMS text blasts |
-| `send_dialpad_sms` (V2) | SMS using Household ORM model |
-| `consolidate_eg_requests` | Consolidates requests when household needs multiple items |
-| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled |
-| `update_field_value` | Bulk updates field for multiple phone numbers |
-| `/clean-record` API | Validates/normalizes phone, email, address |
+| `send_sms` | Sends SMS text blasts |
 
 ---
 
@@ -248,10 +239,9 @@ Raw form intake data.
 2. **System** validates and stores all fields in Intake Table
 3. **System** applies filters and creates Household row
 4. **System** creates Request rows per request type
-5. **System** applies deduplication logic (phone number key)
-6. **System** normalizes data
-7. **System** deletes Intake Table row
-8. **System** schedules auto-expiration (14/30 days)
+5. **System** normalizes data
+6. **System** deletes Intake Table row
+7. **System** schedules auto-expiration (14/30 days)
 
 **Post-condition:** Household and Request records exist; Intake cleared
 
@@ -293,14 +283,13 @@ Raw form intake data.
 
 | # | Condition | System Action | Suggested Handling |
 |---|-----------|---------------|-------------------|
-| A1 | Duplicate phone number | Skip duplicate request | Log and notify admin |
-| A2 | Partial fulfillment (out of stock) | Keep request open | Do not mark as fulfilled to prevent deprioritization |
-| A3 | No-show at appointment | Mark as missed | Return to queue for next outreach cycle |
-| A4 | 1st missed appointment | Continue in queue | Follow outreach flowchart retry logic |
-| A5 | 2nd missed appointment | Email if available | Attempt email contact |
-| A6 | No response after all attempts | Mark as timeout | Close request |
-| A7 | Wrong number | Mark as invalid | Close request |
-| A8 | No longer needs goods | Mark complete | Close request |
+| A1 | Partial fulfillment (out of stock) | Keep request open | Do not mark as fulfilled to prevent deprioritization |
+| A2 | No-show at appointment | Mark as missed | Return to queue for next outreach cycle |
+| A3 | 1st missed appointment | Continue in queue | Follow outreach flowchart retry logic |
+| A4 | 2nd missed appointment | Email if available | Attempt email contact |
+| A5 | No response after all attempts | Mark as timeout | Close request |
+| A6 | Wrong number | Mark as invalid | Close request |
+| A7 | No longer needs goods | Mark complete | Close request |
 
 ---
 
@@ -455,14 +444,12 @@ sequenceDiagram
     Note over FulfilledCount: Daily aggregation updates<br/>[RequestType] counts
 ```
 
-### No-Show / Timeout Sequence
+### No-Show Sequence
 
 ```mermaid
 sequenceDiagram
     participant Volunteer
     participant Households
-    participant Requests
-    participant TimeoutFunction as timeout_eg_requests
 
     Note over Volunteer: End of distribution event
 
@@ -470,71 +457,6 @@ sequenceDiagram
         Volunteer->>Households: UPDATE<br/>Appointment Status = "Missed"
         Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
     end
-
-    Note over TimeoutFunction: Daily cron or manual trigger
-
-    TimeoutFunction->>Requests: Find records where<br/>newer fulfilled request exists
-
-    loop For each stale request
-        TimeoutFunction->>Requests: UPDATE<br/>Status = "Timeout"
-
-        Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days
-    end
-```
-
-### Request Deduplication Sequence
-
-```mermaid
-sequenceDiagram
-    participant Cron as Daily Cron (10:33 PM)
-    participant DedupeFunction as DedupeAirtableViews
-    participant Requests
-
-    Cron->>DedupeFunction: Trigger dedupe_views
-
-    loop For each of 23 views
-        DedupeFunction->>Requests: Fetch all records in view
-        DedupeFunction->>DedupeFunction: Group by Phone Number
-
-        loop For each phone with multiple requests
-            DedupeFunction->>DedupeFunction: Find earliest by Date Submitted
-
-            loop For each duplicate (not earliest)
-                DedupeFunction->>Requests: UPDATE<br/>Status = "Timeout"
-
-                Note over Requests: Marks as "[Type] Timeout"<br/>in status field
-            end
-        end
-    end
-```
-
-### Request Consolidation Sequence
-
-```mermaid
-sequenceDiagram
-    participant Admin
-    participant ConsolidateFunction as consolidate_eg_requests
-    participant SourceView as Source View
-    participant TargetView as Target View
-    participant Requests
-
-    Admin->>ConsolidateFunction: Trigger with source_view,<br/>target_views, request_value
-
-    ConsolidateFunction->>SourceView: Fetch phone numbers
-    ConsolidateFunction->>TargetView: Fetch phone numbers
-    ConsolidateFunction->>ConsolidateFunction: Find matching phones
-
-    loop For each matching household
-        alt Target has request with Timeout
-            ConsolidateFunction->>Requests: UPDATE target<br/>Remove Timeout status
-        else Target missing request
-            ConsolidateFunction->>Requests: UPDATE target<br/>Add request type
-        end
-
-        ConsolidateFunction->>Requests: UPDATE source<br/>Status = "Timeout"
-    end
-
-    Note over Requests: Consolidates multiple requests<br/>to single household record
 ```
 
 ### Outreach Flowchart (Mermaid)
@@ -590,7 +512,7 @@ flowchart TD
 ## 8. Edge Cases and Concessions
 
 ### Data
-- **Edge case**: Multiple households sharing same phone number - may cause deduplication issues
+- **Edge case**: Multiple households sharing same phone number
 - **Edge case**: Multiple phone numbers per household - may create duplicate households
 
 ### Request Expiration
