@@ -62,15 +62,12 @@ The current BAM mutual aid system has technical debt, relies on manual intervent
 |------------------------|-------|-----------|
 | Intake deduplication | Prevents duplicate requests per household | Phone number as unique ID may miss edge cases |
 | Request auto-expiration | Keeps queue fresh and relevant | May lose valid long-term requests |
-| Hashed PII storage | Privacy protection | Increases friction for address-based deliveries |
-| Fulfilled requests anonymization | Data minimization | Loses granular historical data |
 | Automated outreach retry logic | Consistent follow-up process | Requires 3x text, call, email sequence |
 
 ### Alternative Approaches
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| Raw PII storage | Easy lookups, low friction | Privacy risk, compliance issues |
 | Full automation | Reduced manual work | Complex edge cases, less flexibility |
 | Separate systems per workflow | Isolation, simpler components | Data silos, integration overhead |
 
@@ -252,7 +249,7 @@ Raw form intake data.
 3. **System** applies filters and creates Household row
 4. **System** creates Request rows per request type
 5. **System** applies deduplication logic (phone number key)
-6. **System** normalizes data and stores hash of PII
+6. **System** normalizes data
 7. **System** deletes Intake Table row
 8. **System** schedules auto-expiration (14/30 days)
 
@@ -287,9 +284,8 @@ Raw form intake data.
 3. **System** displays recipient's requests
 4. **Volunteer** marks requests as fulfilled
 5. **Volunteer** directs recipient to pickup area
-6. **System** anonymizes and moves to fulfilled requests view
 
-**Post-condition:** Request closed, anonymized record created
+**Post-condition:** Request closed
 
 ---
 
@@ -593,8 +589,7 @@ flowchart TD
 
 ## 8. Edge Cases and Concessions
 
-### Data Privacy
-- **Concession**: Addresses stored in plain text for furniture/delivery requests (hashing would break logistics)
+### Data
 - **Edge case**: Multiple households sharing same phone number - may cause deduplication issues
 - **Edge case**: Multiple phone numbers per household - may create duplicate households
 
@@ -614,12 +609,11 @@ flowchart TD
 
 ## 9. Open Questions
 
-1. **PII Hashing**: How to handle address obfuscation without breaking delivery/pickup workflows?
-2. **Volunteer Access**: What is the access revocation timeline and process?
-3. **Furniture Team Flow**: Need detailed workflow from furniture team (currently not taking new requests)
-4. **Phone Call Outreach**: Need to research and document single-person phone outreach flow
-5. **Admin Flows**: Need to interview admins to document administrative workflows
-6. **Cron Jobs**: Review automation jobs for technical debt assessment
+1. **Volunteer Access**: What is the access revocation timeline and process?
+2. **Furniture Team Flow**: Need detailed workflow from furniture team (currently not taking new requests)
+3. **Phone Call Outreach**: Need to research and document single-person phone outreach flow
+4. **Admin Flows**: Need to interview admins to document administrative workflows
+5. **Cron Jobs**: Review automation jobs for technical debt assessment
 
 ---
 
