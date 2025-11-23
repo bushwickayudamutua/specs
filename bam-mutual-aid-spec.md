@@ -151,6 +151,144 @@ All request names stored in trilingual format (Spanish/English/Chinese):
 "Jabón & Productos de baño / Soap & Shower Products / 肥皂和淋浴用品"
 ```
 
+### Supported Languages
+- English, Spanish, Mandarin, Cantonese, Toishanese
+- Quechua, Portuguese, Haitian Creole, Tagalog, Arabic, French
+
+---
+
+## 4.1 Airtable V2 Schema (New Base)
+
+### Tables Overview
+
+#### Households
+Primary table for recipient households.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Name | singleLineText | Household name |
+| ID | autoNumber | Unique identifier |
+| Phone Number | phoneNumber | Primary contact (unique key) |
+| Invalid Phone Number? | checkbox | Validation flag |
+| Int'l Phone Number? | checkbox | International number flag |
+| Email | email | Contact email |
+| Email Error | singleLineText | Validation error message |
+| Languages | multipleSelects | Preferred languages |
+| Notes | richText | Free-form notes |
+| Requests | multipleRecordLinks | Link to Requests table |
+| Open Request Types | multipleLookupValues | Lookup of open request types |
+| Delivered Request Types | multipleLookupValues | Lookup of delivered types |
+| Social Service Requests | multipleRecordLinks | Link to Social Service Requests |
+| Open Social Service Request Types | multipleLookupValues | Lookup of open SS types |
+| Created At | createdTime | Record creation time |
+| Updated At | lastModifiedTime | Last modification time |
+| Date of Oldest Fulfillable Request | rollup | Earliest open request date |
+| Legacy First/Last Date Submitted | date | Migration fields |
+| Form Submissions | multipleRecordLinks | Link to form submissions |
+| Appointment Date | date | Scheduled appointment |
+| Appointment Time | singleSelect | Time slot (11:00 AM, 11:30 AM) |
+| Appointment Status | singleSelect | Booked/Checked-in/Missed |
+| Last Texted | date | Last SMS outreach date |
+
+#### Requests
+Individual goods/service requests linked to households.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Label | formula | Display label (from Type) |
+| Type | singleSelect | Request type (trilingual) |
+| Household | multipleRecordLinks | Link to Households |
+| Status | singleSelect | Open/Timeout/Delivered |
+| Notes | multilineText | Request-specific notes |
+| Updated At | lastModifiedTime | Last modification |
+| Status Last Updated At | lastModifiedTime | When status changed |
+| Legacy Date Submitted | date | Migration field |
+| Request Opened At | formula | Effective open date |
+| Processing Date | formula | Auto-calculated expiry (14/30 days) |
+| Street Address | singleLineText | Delivery address |
+| City, State | singleLineText | Location |
+| Zip Code | number | Postal code |
+| Geocode | singleLineText | Geo coordinates |
+| Address | singleLineText | Formatted address |
+| Phone Number (from Household) | multipleLookupValues | Lookup |
+| Last texted (from Household) | multipleLookupValues | Lookup |
+
+**Processing Date Formula:**
+- Status changed to Delivered: +14 days (or +30 for Pots & Pans)
+- Status changed to Timeout: +14 days
+
+#### Social Service Requests
+Separate table for social services (different from goods).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Label | formula | Display label |
+| Phone Number (from Household) | multipleLookupValues | Contact lookup |
+| Type | singleSelect | Service type (12 options) |
+| Status | singleSelect | Open/Timeout/Delivered |
+| Household | multipleRecordLinks | Link to Households |
+| Internet Access | multipleSelects | Current internet situation |
+| Roof Accessible? | checkbox | For internet installation |
+| Address fields | various | Location data |
+| Status Last Updated At | lastModifiedTime | Status change time |
+| Notes | multilineText | Service notes |
+| Request Opened At | formula | Effective open date |
+| Processing Date | formula | +14 days after status change |
+
+#### Distros
+Distribution event tracking.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Date & Time | dateTime | Event date/time |
+| Location | singleLineText | Venue |
+| Duration | duration | Event length |
+| Appointments | singleLineText | Appointment count/details |
+| Notes | multilineText | Event notes |
+
+#### Fulfilled Request Count
+Aggregated metrics per date.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Date | date | Reporting date |
+| [Request Type] | number | Count per type (50+ columns) |
+
+Tracks all request types: Groceries, Diapers, Furniture, Kitchen, Social Services, etc.
+
+#### Assistance Request Form Submissions
+Raw form intake data.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | autoNumber | Submission ID |
+| Name | singleLineText | Requestor name |
+| Address fields | various | Location data |
+| Phone Number | phoneNumber | Contact |
+| Email | email | Contact |
+| Languages | multipleSelects | Preferred languages |
+| Request Types | multipleSelects | Goods requested |
+| Furniture Items | multipleSelects | Furniture specifics |
+| Bed Details | multipleSelects | Bed size/type |
+| Furniture Acknowledgement | checkbox | Terms accepted |
+| Kitchen Items | multipleSelects | Kitchen specifics |
+| Social Service Requests | multipleSelects | Services needed |
+| Internet Access | multipleSelects | Current situation |
+| Roof Accessible? | checkbox | For internet |
+| Notes | richText | Additional info |
+| Created At | createdTime | Submission time |
+| Households | multipleRecordLinks | Link to created household |
+
+### Request Status Values
+- **Open**: Active, awaiting fulfillment
+- **Timeout**: Expired or no response
+- **Delivered**: Fulfilled
+
+### Appointment Status Values
+- **Booked**: Confirmed for distribution
+- **Checked-in**: Attended, checking in
+- **Missed**: No-show
+
 ---
 
 ## 5. Step-by-Step Flows
@@ -227,31 +365,52 @@ All request names stored in trilingual format (Spanish/English/Chinese):
 ```mermaid
 classDiagram
     class Household {
-        +phone_hash : String
-        +created_at : DateTime
+        +ID : autoNumber
+        +Name : String
+        +Phone Number : phoneNumber
+        +Email : email
+        +Languages : multipleSelects
+        +Appointment Date : date
+        +Appointment Status : singleSelect
+        +Last Texted : date
     }
     class Request {
-        +id : UUID
-        +type : RequestType
-        +status : Status
-        +processing_date : DateTime
-        +expiry_days : Int
+        +Type : singleSelect
+        +Status : singleSelect
+        +Request Opened At : formula
+        +Processing Date : formula
+        +Street Address : String
+        +Notes : multilineText
     }
-    class FulfilledRequest {
-        +type : RequestType
-        +fulfilled_at : DateTime
-        +anonymized : Boolean
+    class SocialServiceRequest {
+        +Type : singleSelect
+        +Status : singleSelect
+        +Internet Access : multipleSelects
+        +Roof Accessible : checkbox
+        +Processing Date : formula
     }
-    class IntakeForm {
-        +raw_fields : JSON
-        +language : String
-        +submitted_at : DateTime
+    class FormSubmission {
+        +ID : autoNumber
+        +Request Types : multipleSelects
+        +Furniture Items : multipleSelects
+        +Kitchen Items : multipleSelects
+        +Social Service Requests : multipleSelects
+        +Created At : createdTime
+    }
+    class Distro {
+        +Date Time : dateTime
+        +Location : String
+        +Duration : duration
+        +Appointments : String
+    }
+    class FulfilledRequestCount {
+        +Date : date
+        +[RequestType] : number
     }
 
     Household "1" --> "*" Request : has
-    Request --> FulfilledRequest : becomes
-    IntakeForm --> Household : creates
-    IntakeForm --> Request : creates
+    Household "1" --> "*" SocialServiceRequest : has
+    FormSubmission "*" --> "1" Household : creates
 ```
 
 ### Intake Processing Sequence
