@@ -11,6 +11,12 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 - GitHub repo: bushwickayudamutua/bam-automation
 - API docs: https://airtable.com/appjIo54Z8MWrqhlI/api/docs
 
+### Existing Outreach Flowchart
+
+![BAM Outreach Flowchart](./bam-outreach-flowchart.png)
+
+*Current outreach process: automated text blasts, retry logic (3x text, then call, then email), timeout handling*
+
 ### Stakeholders
 - **Recipients**: Community members requesting goods/services
 - **Volunteers**: Outreach, check-in, delivery/transport, furniture teams
@@ -83,9 +89,73 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-## 4. Step-by-Step Flows
+## 4. Existing Automation Functions
 
-### 4.1 Intake Processing (Happy Path)
+The current system (bam-automation repo) includes these automated functions:
+
+### Scheduled Jobs (Cron)
+
+| Function | Schedule | Purpose |
+|----------|----------|---------|
+| `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON |
+| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views |
+| `UpdateMailjetLists` | Daily | Syncs contacts to Mailjet email lists |
+| `SnapshotAirtableViews` | Daily | Backs up modified records to S3 |
+
+### Web-Triggered Functions
+
+| Function | Purpose |
+|----------|---------|
+| `send_dialpad_sms` | Sends SMS text blasts via Dialpad API |
+| `send_dialpad_sms` (V2) | SMS using new Household ORM model |
+| `consolidate_eg_requests` | Consolidates requests when household needs multiple items |
+| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled |
+| `update_field_value` | Bulk updates field for multiple phone numbers |
+| `/clean-record` API | Validates/normalizes phone, email, address |
+
+### External Service Integrations
+
+| Service | Purpose |
+|---------|---------|
+| Airtable | Primary database |
+| Dialpad | SMS messaging |
+| Mailjet | Email list management |
+| Google Maps | Address normalization |
+| NYC Planning Labs | Geospatial address lookup |
+| Digital Ocean Spaces | File storage/CDN for snapshots |
+
+### Request Type Categories
+
+**Essential Goods:**
+- Toiletries: Soap, Pads, Baby Diapers, Adult Diapers
+- Household: Clothing, School Supplies, Stroller, Pet Food
+
+**Kitchen Items:**
+- Pots & Pans, Plates, Cups, Utensils, Microwave, Coffee Maker, Blender
+
+**Furniture:**
+- Beds (Crib through King, mattress/frame options)
+- Sofa, Dresser, Desk, Coffee Table, Chairs, Storage, Dining Table, Fridge, AC
+
+**Food Requests:**
+- Groceries, Hot meals
+
+**Social Services:**
+- Housing, Health Insurance, English Classes, Transportation
+- Tenant legal, In-school services, Tutoring, Business support
+- Internet, Food benefits, Child disability, Pet assistance
+
+### Multi-Language Support
+All request names stored in trilingual format (Spanish/English/Chinese):
+```
+"Jabón & Productos de baño / Soap & Shower Products / 肥皂和淋浴用品"
+```
+
+---
+
+## 5. Step-by-Step Flows
+
+### 5.1 Intake Processing (Happy Path)
 
 **Pre-condition:** Form submission received in Intake Table
 
@@ -102,7 +172,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-### 4.2 Distribution Outreach Flow (Happy Path)
+### 5.2 Distribution Outreach Flow (Happy Path)
 
 **Pre-condition:** Distribution scheduled, inventory checked
 
@@ -120,7 +190,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-### 4.3 Check-In Flow (Happy Path)
+### 5.3 Check-In Flow (Happy Path)
 
 **Pre-condition:** Recipient confirmed appointment
 
@@ -135,7 +205,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-### 4.4 Alternate / Error Paths
+### 5.4 Alternate / Error Paths
 
 | # | Condition | System Action | Suggested Handling |
 |---|-----------|---------------|-------------------|
@@ -150,7 +220,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-## 5. UML Diagrams
+## 6. UML Diagrams
 
 ### Entity Relationships
 
@@ -229,7 +299,7 @@ stateDiagram-v2
 
 ---
 
-## 6. Edge Cases and Concessions
+## 7. Edge Cases and Concessions
 
 ### Data Privacy
 - **Concession**: Addresses stored in plain text for furniture/delivery requests (hashing would break logistics)
@@ -250,7 +320,7 @@ stateDiagram-v2
 
 ---
 
-## 7. Open Questions
+## 8. Open Questions
 
 1. **PII Hashing**: How to handle address obfuscation without breaking delivery/pickup workflows?
 2. **Volunteer Access**: What is the access revocation timeline and process?
@@ -261,7 +331,7 @@ stateDiagram-v2
 
 ---
 
-## 8. Glossary / References
+## 9. Glossary / References
 
 ### Terms
 - **BAM** - Bushwick Ayuda Mutua
