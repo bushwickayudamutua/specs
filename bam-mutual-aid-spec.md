@@ -1,27 +1,20 @@
-# BAM Mutual Aid System - Technical Specification
+# BAM Mutual Aid System V2 - Technical Specification
 
 ## 1. Background
 
 ### Problem Statement
-Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requests, distribution events, and volunteer coordination through a combination of Airtable, Digital Ocean functions, and manual processes. The current system has technical debt, relies on manual intervention for key workflows, and needs better data privacy practices.
+The current BAM mutual aid system has technical debt, relies on manual intervention for key workflows, and needs better data privacy practices. This specification defines the improved V2 system that addresses these issues while maintaining all existing functionality.
 
-### Context / History
-- Existing system uses Airtable as primary database
-- Automation functions hosted on Digital Ocean
-- GitHub repo: bushwickayudamutua/bam-automation
-- API docs: https://airtable.com/appjIo54Z8MWrqhlI/api/docs
-
-### Existing Outreach Flowchart
-
-![BAM Outreach Flowchart](./bam-outreach-flowchart.png)
-
-*Current outreach process: automated text blasts, retry logic (3x text, then call, then email), timeout handling*
+### Reference Documents
+- **Current System Documentation:** [background-current-system.md](./background-current-system.md)
+- **Existing Outreach Flowchart:** [bam-outreach-flowchart.png](./bam-outreach-flowchart.png)
+- **Intake Forms:** [forms/](./forms/)
 
 ### Stakeholders
 - **Recipients**: Community members requesting goods/services
 - **Volunteers**: Outreach, check-in, delivery/transport, furniture teams
 - **Admins**: System administrators managing distributions and data
-- **External Systems**: Dialpad SMS, Airtable, Digital Ocean
+- **External Systems**: SMS provider, Database, Automation platform
 
 ---
 
@@ -59,9 +52,9 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 | Technical Functionality | Reasoning | Tradeoffs |
 |------------------------|-----------|-----------|
-| Appointments & Distros tables | May be deprecated | Legacy data structure |
 | Full automation of volunteer matching | Complex language/availability matching | Manual oversight still needed |
 | Real-time inventory management | Informal post-distro reporting works | May miss accuracy |
+| Automated language detection | Recipient knows best | Self-selection more reliable |
 
 ### Value Proposition
 
@@ -71,6 +64,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 | Request auto-expiration | Keeps queue fresh and relevant | May lose valid long-term requests |
 | Hashed PII storage | Privacy protection | Increases friction for address-based deliveries |
 | Fulfilled requests anonymization | Data minimization | Loses granular historical data |
+| Automated outreach retry logic | Consistent follow-up process | Requires 3x text, call, email sequence |
 
 ### Alternative Approaches
 
@@ -89,75 +83,7 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ---
 
-## 4. Existing Automation Functions
-
-The current system (bam-automation repo) includes these automated functions:
-
-### Scheduled Jobs (Cron)
-
-| Function | Schedule | Purpose |
-|----------|----------|---------|
-| `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON |
-| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views |
-| `UpdateMailjetLists` | Daily | Syncs contacts to Mailjet email lists |
-| `SnapshotAirtableViews` | Daily | Backs up modified records to S3 |
-
-### Web-Triggered Functions
-
-| Function | Purpose |
-|----------|---------|
-| `send_dialpad_sms` | Sends SMS text blasts via Dialpad API |
-| `send_dialpad_sms` (V2) | SMS using new Household ORM model |
-| `consolidate_eg_requests` | Consolidates requests when household needs multiple items |
-| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled |
-| `update_field_value` | Bulk updates field for multiple phone numbers |
-| `/clean-record` API | Validates/normalizes phone, email, address |
-
-### External Service Integrations
-
-| Service | Purpose |
-|---------|---------|
-| Airtable | Primary database |
-| Dialpad | SMS messaging |
-| Mailjet | Email list management |
-| Google Maps | Address normalization |
-| NYC Planning Labs | Geospatial address lookup |
-| Digital Ocean Spaces | File storage/CDN for snapshots |
-
-### Request Type Categories
-
-**Essential Goods:**
-- Toiletries: Soap, Pads, Baby Diapers, Adult Diapers
-- Household: Clothing, School Supplies, Stroller, Pet Food
-
-**Kitchen Items:**
-- Pots & Pans, Plates, Cups, Utensils, Microwave, Coffee Maker, Blender
-
-**Furniture:**
-- Beds (Crib through King, mattress/frame options)
-- Sofa, Dresser, Desk, Coffee Table, Chairs, Storage, Dining Table, Fridge, AC
-
-**Food Requests:**
-- Groceries, Hot meals
-
-**Social Services:**
-- Housing, Health Insurance, English Classes, Transportation
-- Tenant legal, In-school services, Tutoring, Business support
-- Internet, Food benefits, Child disability, Pet assistance
-
-### Multi-Language Support
-All request names stored in trilingual format (Spanish/English/Chinese):
-```
-"Jabón & Productos de baño / Soap & Shower Products / 肥皂和淋浴用品"
-```
-
-### Supported Languages
-- English, Spanish, Mandarin, Cantonese, Toishanese
-- Quechua, Portuguese, Haitian Creole, Tagalog, Arabic, French
-
----
-
-## 4.1 Airtable V2 Schema (New Base)
+## 4. Data Schema
 
 ### Tables Overview
 
@@ -254,8 +180,6 @@ Aggregated metrics per date.
 | Date | date | Reporting date |
 | [Request Type] | number | Count per type (50+ columns) |
 
-Tracks all request types: Groceries, Diapers, Furniture, Kitchen, Social Services, etc.
-
 #### Assistance Request Form Submissions
 Raw form intake data.
 
@@ -279,21 +203,47 @@ Raw form intake data.
 | Created At | createdTime | Submission time |
 | Households | multipleRecordLinks | Link to created household |
 
-### Request Status Values
+### Status Values
+
+**Request Status:**
 - **Open**: Active, awaiting fulfillment
 - **Timeout**: Expired or no response
 - **Delivered**: Fulfilled
 
-### Appointment Status Values
+**Appointment Status:**
 - **Booked**: Confirmed for distribution
 - **Checked-in**: Attended, checking in
 - **Missed**: No-show
 
 ---
 
-## 5. Step-by-Step Flows
+## 5. System Functions
 
-### 5.1 Intake Processing (Happy Path)
+### Scheduled Jobs (Cron)
+
+| Function | Schedule | Purpose |
+|----------|----------|---------|
+| `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON |
+| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views |
+| `UpdateMailjetLists` | Daily | Syncs contacts to email lists |
+| `SnapshotAirtableViews` | Daily | Backs up modified records to storage |
+
+### Web-Triggered Functions
+
+| Function | Purpose |
+|----------|---------|
+| `send_dialpad_sms` | Sends SMS text blasts |
+| `send_dialpad_sms` (V2) | SMS using Household ORM model |
+| `consolidate_eg_requests` | Consolidates requests when household needs multiple items |
+| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled |
+| `update_field_value` | Bulk updates field for multiple phone numbers |
+| `/clean-record` API | Validates/normalizes phone, email, address |
+
+---
+
+## 6. Step-by-Step Flows
+
+### 6.1 Intake Processing (Happy Path)
 
 **Pre-condition:** Form submission received in Intake Table
 
@@ -310,7 +260,7 @@ Raw form intake data.
 
 ---
 
-### 5.2 Distribution Outreach Flow (Happy Path)
+### 6.2 Distribution Outreach Flow (Happy Path)
 
 **Pre-condition:** Distribution scheduled, inventory checked
 
@@ -318,22 +268,22 @@ Raw form intake data.
    - Available supplies match
    - Language availability at distro
    - Not recently attended
-2. **System** (Digital Ocean) processes view via `/send_dialpad_sms`
+2. **System** processes view via SMS function
 3. **System** sends text blast with language-specific templates
 4. **Recipients** respond to confirm (target: 240 people for 60 appointments)
-5. **Volunteer** manually marks confirmations in Airtable
+5. **Volunteer** manually marks confirmations
 6. **Recipients** attend distribution
 
 **Post-condition:** Appointments confirmed, ready for check-in
 
 ---
 
-### 5.3 Check-In Flow (Happy Path)
+### 6.3 Check-In Flow (Happy Path)
 
 **Pre-condition:** Recipient confirmed appointment
 
 1. **Recipient** arrives at distribution
-2. **Volunteer** performs phone number lookup in Airtable
+2. **Volunteer** performs phone number lookup
 3. **System** displays recipient's requests
 4. **Volunteer** marks requests as fulfilled
 5. **Volunteer** directs recipient to pickup area
@@ -343,7 +293,7 @@ Raw form intake data.
 
 ---
 
-### 5.4 Alternate / Error Paths
+### 6.4 Alternate / Error Paths
 
 | # | Condition | System Action | Suggested Handling |
 |---|-----------|---------------|-------------------|
@@ -358,7 +308,7 @@ Raw form intake data.
 
 ---
 
-## 6. UML Diagrams
+## 7. UML Diagrams
 
 ### Entity Relationships
 
@@ -428,7 +378,7 @@ sequenceDiagram
     User->>Form: Submit multi-language form
     Form->>FormSubmissions: CREATE record<br/>Name, Phone, Email, Address<br/>Request Types, Languages
 
-    Note over FormSubmissions: Airtable Automation triggers
+    Note over FormSubmissions: Automation triggers
 
     FormSubmissions->>CleanAPI: Validate phone, email, address
     CleanAPI-->>FormSubmissions: Formatted data + validation flags
@@ -458,24 +408,24 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Admin
-    participant Airtable
-    participant DOFunction as send_dialpad_sms
-    participant Dialpad
+    participant Database
+    participant SMSFunction as SMS Function
+    participant SMSProvider
     participant Households
     participant Recipient
 
-    Admin->>Airtable: Create filtered view<br/>(supplies match, language, not recent)
-    Admin->>DOFunction: Trigger with view_name,<br/>message_template, max_messages
+    Admin->>Database: Create filtered view<br/>(supplies match, language, not recent)
+    Admin->>SMSFunction: Trigger with view_name,<br/>message_template, max_messages
 
-    DOFunction->>Airtable: Fetch records from view
-    DOFunction->>DOFunction: Deduplicate by Phone Number
+    SMSFunction->>Database: Fetch records from view
+    SMSFunction->>SMSFunction: Deduplicate by Phone Number
 
     loop For each household (max 240)
-        DOFunction->>Dialpad: Send SMS with [FIRST_NAME],<br/>[REQUEST_URL] (randomized)
-        Dialpad->>Recipient: SMS delivered
-        DOFunction->>Households: UPDATE<br/>Last Texted = TODAY()
+        SMSFunction->>SMSProvider: Send SMS with [FIRST_NAME],<br/>[REQUEST_URL] (randomized)
+        SMSProvider->>Recipient: SMS delivered
+        SMSFunction->>Households: UPDATE<br/>Last Texted = TODAY()
 
-        Note over DOFunction: Rate limit: 30 msgs then 30s delay
+        Note over SMSFunction: Rate limit: 30 msgs then 30s delay
     end
 
     Recipient-->>Admin: Confirms via text response
@@ -516,7 +466,7 @@ sequenceDiagram
     participant Volunteer
     participant Households
     participant Requests
-    participant DOFunction as timeout_eg_requests
+    participant TimeoutFunction as timeout_eg_requests
 
     Note over Volunteer: End of distribution event
 
@@ -525,12 +475,12 @@ sequenceDiagram
         Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
     end
 
-    Note over DOFunction: Daily cron or manual trigger
+    Note over TimeoutFunction: Daily cron or manual trigger
 
-    DOFunction->>Requests: Find records where<br/>newer fulfilled request exists
+    TimeoutFunction->>Requests: Find records where<br/>newer fulfilled request exists
 
     loop For each stale request
-        DOFunction->>Requests: UPDATE<br/>Status = "Timeout"
+        TimeoutFunction->>Requests: UPDATE<br/>Status = "Timeout"
 
         Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days
     end
@@ -541,20 +491,20 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Cron as Daily Cron (10:33 PM)
-    participant DOFunction as DedupeAirtableViews
+    participant DedupeFunction as DedupeAirtableViews
     participant Requests
 
-    Cron->>DOFunction: Trigger dedupe_views
+    Cron->>DedupeFunction: Trigger dedupe_views
 
     loop For each of 23 views
-        DOFunction->>Requests: Fetch all records in view
-        DOFunction->>DOFunction: Group by Phone Number
+        DedupeFunction->>Requests: Fetch all records in view
+        DedupeFunction->>DedupeFunction: Group by Phone Number
 
         loop For each phone with multiple requests
-            DOFunction->>DOFunction: Find earliest by Date Submitted
+            DedupeFunction->>DedupeFunction: Find earliest by Date Submitted
 
             loop For each duplicate (not earliest)
-                DOFunction->>Requests: UPDATE<br/>Status = "Timeout"
+                DedupeFunction->>Requests: UPDATE<br/>Status = "Timeout"
 
                 Note over Requests: Marks as "[Type] Timeout"<br/>in status field
             end
@@ -567,25 +517,25 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Admin
-    participant DOFunction as consolidate_eg_requests
+    participant ConsolidateFunction as consolidate_eg_requests
     participant SourceView as Source View
     participant TargetView as Target View
     participant Requests
 
-    Admin->>DOFunction: Trigger with source_view,<br/>target_views, request_value
+    Admin->>ConsolidateFunction: Trigger with source_view,<br/>target_views, request_value
 
-    DOFunction->>SourceView: Fetch phone numbers
-    DOFunction->>TargetView: Fetch phone numbers
-    DOFunction->>DOFunction: Find matching phones
+    ConsolidateFunction->>SourceView: Fetch phone numbers
+    ConsolidateFunction->>TargetView: Fetch phone numbers
+    ConsolidateFunction->>ConsolidateFunction: Find matching phones
 
     loop For each matching household
         alt Target has request with Timeout
-            DOFunction->>Requests: UPDATE target<br/>Remove Timeout status
+            ConsolidateFunction->>Requests: UPDATE target<br/>Remove Timeout status
         else Target missing request
-            DOFunction->>Requests: UPDATE target<br/>Add request type
+            ConsolidateFunction->>Requests: UPDATE target<br/>Add request type
         end
 
-        DOFunction->>Requests: UPDATE source<br/>Status = "Timeout"
+        ConsolidateFunction->>Requests: UPDATE source<br/>Status = "Timeout"
     end
 
     Note over Requests: Consolidates multiple requests<br/>to single household record
@@ -595,20 +545,20 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Start([START]) --> TextBlast[BAM Tech sends automated<br/>text blast offering appointment]
+    Start([START]) --> TextBlast[System sends automated<br/>text blast offering appointment]
 
     TextBlast --> Response1{Response?}
 
-    Response1 -->|Yes, confirming<br/>they can come| Confirm[BAM or partner org responds<br/>via text & confirms appt<br/>during volunteer outreach shift]
-    Response1 -->|No| Retry1[BAM texts again<br/>at least 3x total]
+    Response1 -->|Yes, confirming<br/>they can come| Confirm[Volunteer responds<br/>via text & confirms appt<br/>during outreach shift]
+    Response1 -->|No| Retry1[System texts again<br/>at least 3x total]
 
     Retry1 --> Response2{Response?}
     Response2 -->|Yes| Confirm
-    Response2 -->|No| PhoneCall[BAM or partner org calls<br/>to offer an appointment]
+    Response2 -->|No| PhoneCall[Volunteer calls<br/>to offer an appointment]
 
     PhoneCall --> CallResponse{Response?}
     CallResponse -->|Confirms| Confirm
-    CallResponse -->|No answer<br/>voicemail<br/># not in service| RetryCall[BAM calls again<br/>at least 3x total]
+    CallResponse -->|No answer<br/>voicemail<br/># not in service| RetryCall[Volunteer calls again<br/>at least 3x total]
     CallResponse -->|Needs a<br/>different date| PhoneCall
     CallResponse -->|Wrong number| Timeout2([Goods/services<br/>marked 'timeout'<br/>& request is closed])
     CallResponse -->|Yes but no longer<br/>in need of goods/services| Timeout2
@@ -641,7 +591,7 @@ flowchart TD
 
 ---
 
-## 7. Edge Cases and Concessions
+## 8. Edge Cases and Concessions
 
 ### Data Privacy
 - **Concession**: Addresses stored in plain text for furniture/delivery requests (hashing would break logistics)
@@ -662,18 +612,18 @@ flowchart TD
 
 ---
 
-## 8. Open Questions
+## 9. Open Questions
 
 1. **PII Hashing**: How to handle address obfuscation without breaking delivery/pickup workflows?
 2. **Volunteer Access**: What is the access revocation timeline and process?
 3. **Furniture Team Flow**: Need detailed workflow from furniture team (currently not taking new requests)
 4. **Phone Call Outreach**: Need to research and document single-person phone outreach flow
 5. **Admin Flows**: Need to interview admins to document administrative workflows
-6. **Cron Jobs**: Review Digital Ocean cron jobs for technical debt assessment
+6. **Cron Jobs**: Review automation jobs for technical debt assessment
 
 ---
 
-## 9. Glossary / References
+## 10. Glossary / References
 
 ### Terms
 - **BAM** - Bushwick Ayuda Mutua
@@ -693,7 +643,5 @@ flowchart TD
 - Pots and pans (30-day expiry)
 
 ### Links
-- Airtable API: https://airtable.com/appjIo54Z8MWrqhlI/api/docs
-- Automation repo: https://github.com/bushwickayudamutua/bam-automation
-- Entry point: `functions/project.yml`
-- SMS endpoint: `/send_dialpad_sms`
+- **Current System Background:** [background-current-system.md](./background-current-system.md)
+- **Intake Forms:** [forms/](./forms/)
