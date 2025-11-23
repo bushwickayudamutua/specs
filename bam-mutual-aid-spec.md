@@ -591,26 +591,52 @@ sequenceDiagram
     Note over Requests: Consolidates multiple requests<br/>to single household record
 ```
 
-### Outreach State Machine
+### Outreach Flowchart (Mermaid)
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Pending
-    Pending --> TextSent : Distribution scheduled
-    TextSent --> Confirmed : User confirms
-    TextSent --> Retry1 : No response
-    Retry1 --> Retry2 : No response
-    Retry2 --> Retry3 : No response
-    Retry3 --> PhoneCall : No response
-    PhoneCall --> Confirmed : User confirms
-    PhoneCall --> EmailAttempt : No answer
-    EmailAttempt --> Confirmed : User confirms
-    EmailAttempt --> Timeout : No response
-    Confirmed --> Fulfilled : Attended
-    Confirmed --> Missed : No show
-    Missed --> Timeout : 2nd miss
-    Timeout --> [*]
-    Fulfilled --> [*]
+flowchart TD
+    Start([START]) --> TextBlast[BAM Tech sends automated<br/>text blast offering appointment]
+
+    TextBlast --> Response1{Response?}
+
+    Response1 -->|Yes, confirming<br/>they can come| Confirm[BAM or partner org responds<br/>via text & confirms appt<br/>during volunteer outreach shift]
+    Response1 -->|No| Retry1[BAM texts again<br/>at least 3x total]
+
+    Retry1 --> Response2{Response?}
+    Response2 -->|Yes| Confirm
+    Response2 -->|No| PhoneCall[BAM or partner org calls<br/>to offer an appointment]
+
+    PhoneCall --> CallResponse{Response?}
+    CallResponse -->|Confirms| Confirm
+    CallResponse -->|No answer<br/>voicemail<br/># not in service| RetryCall[BAM calls again<br/>at least 3x total]
+    CallResponse -->|Needs a<br/>different date| PhoneCall
+    CallResponse -->|Wrong number| Timeout2([Goods/services<br/>marked 'timeout'<br/>& request is closed])
+    CallResponse -->|Yes but no longer<br/>in need of goods/services| Timeout2
+
+    RetryCall --> RetryResponse{Response?}
+    RetryResponse -->|Confirms| Confirm
+    RetryResponse -->|No answer<br/>voicemail<br/># not in service| EmailCheck[Email offering appt<br/>times. Response<br/>within one week?]
+
+    EmailCheck --> EmailResponse{Response?}
+    EmailResponse -->|Yes| HasEmail{Is there an<br/>email?}
+    EmailResponse -->|No| Timeout2
+    EmailResponse -->|Yes but no longer<br/>in need of goods/services| Timeout2
+
+    HasEmail -->|Yes| Confirm
+    HasEmail -->|No| Timeout2
+
+    Confirm --> Appt1{1st missed<br/>appointment}
+    Appt1 -->|Appt attended,<br/>goods/service<br/>registration<br/>received| Delivered([Goods/services<br/>marked 'delivered'<br/>& request is closed])
+
+    Appt1 -->|2nd missed<br/>appointment| Appt2Check{Response?}
+    Appt2Check -->|No| Timeout2
+    Appt2Check -->|Yes but no longer<br/>in need of goods/services| Timeout2
+
+    style Start fill:#f9f9f9,stroke:#333
+    style Delivered fill:#90EE90,stroke:#333
+    style Timeout2 fill:#FFB6C1,stroke:#333
+    style TextBlast fill:#E6E6FA,stroke:#333
+    style Confirm fill:#FFEFD5,stroke:#333
 ```
 
 ---
