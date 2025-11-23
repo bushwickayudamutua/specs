@@ -433,7 +433,67 @@ sequenceDiagram
 
 ---
 
-### 6.4 Alternate / Error Paths
+### 6.4 Delivery / Transport Flow
+
+**Pre-condition:** Items need to be transported between locations
+
+1. **Coordinator** sends message to BAM group requesting transport help
+2. **Volunteer** shows up at pickup location with vehicle
+3. **Team** loads items into vehicle
+4. **Volunteer** drives to destination
+5. **Team** unloads items at destination
+
+**Post-condition:** Items transported to destination
+
+**Note:** This flow is primarily text-based coordination through group messaging.
+
+---
+
+### 6.5 Donate / Volunteer Flow
+
+**Pre-condition:** Community member wants to donate or volunteer
+
+1. **User** submits donate/volunteer form
+2. **System** records submission
+3. **Admin** reviews and follows up as needed
+
+**Post-condition:** Donation/volunteer interest recorded
+
+**Note:** Furniture donations have a separate flow handled by the furniture team.
+
+---
+
+### 6.6 Post-Distro Inventory Flow
+
+**Pre-condition:** Distribution event completed
+
+1. **Volunteer** takes inventory of remaining supplies
+2. **Volunteer** sends inventory report to group (text-based)
+3. **Admin** reviews inventory levels for next distro planning
+
+**Post-condition:** Inventory levels communicated to team
+
+**Example Report Format:**
+```
+POST DISTRO INVENTORY [DATE]
+Basement inventory:
+Buyer: [Name]
+Inventory: [Name]
+
+Diapers:
+1: X boxes
+2: X boxes
+...
+
+Pads: X packs
+Soap: X boxes
+School Supplies: X boxes
+Kitchen: description
+```
+
+---
+
+### 6.7 Alternate / Error Paths
 
 | # | Condition | System Action | Suggested Handling |
 |---|-----------|---------------|-------------------|
