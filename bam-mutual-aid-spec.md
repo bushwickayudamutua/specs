@@ -245,117 +245,13 @@ Raw form intake data.
 
 **Post-condition:** Household and Request records exist; Intake cleared
 
----
-
-### 6.2 Distribution Outreach Flow (Happy Path)
-
-**Pre-condition:** Distribution scheduled, inventory checked
-
-1. **Admin** creates filtered view matching target population criteria:
-   - Available supplies match
-   - Language availability at distro
-   - Not recently attended
-2. **System** processes view via SMS function
-3. **System** sends text blast with language-specific templates
-4. **Recipients** respond to confirm (target: 240 people for 60 appointments)
-5. **Volunteer** manually marks confirmations
-6. **Recipients** attend distribution
-
-**Post-condition:** Appointments confirmed, ready for check-in
-
----
-
-### 6.3 Check-In Flow (Happy Path)
-
-**Pre-condition:** Recipient confirmed appointment
-
-1. **Recipient** arrives at distribution
-2. **Volunteer** performs phone number lookup
-3. **System** displays recipient's requests
-4. **Volunteer** marks requests as fulfilled
-5. **Volunteer** directs recipient to pickup area
-
-**Post-condition:** Request closed
-
----
-
-### 6.4 Alternate / Error Paths
-
-| # | Condition | System Action | Suggested Handling |
-|---|-----------|---------------|-------------------|
-| A1 | Partial fulfillment (out of stock) | Keep request open | Do not mark as fulfilled to prevent deprioritization |
-| A2 | No-show at appointment | Mark as missed | Return to queue for next outreach cycle |
-| A3 | 1st missed appointment | Continue in queue | Follow outreach flowchart retry logic |
-| A4 | 2nd missed appointment | Email if available | Attempt email contact |
-| A5 | No response after all attempts | Mark as timeout | Close request |
-| A6 | Wrong number | Mark as invalid | Close request |
-| A7 | No longer needs goods | Mark complete | Close request |
-
----
-
-## 7. UML Diagrams
-
-### Entity Relationships
-
-```mermaid
-classDiagram
-    class Household {
-        +ID : autoNumber
-        +Name : String
-        +Phone Number : phoneNumber
-        +Email : email
-        +Languages : multipleSelects
-        +Appointment Date : date
-        +Appointment Status : singleSelect
-        +Last Texted : date
-    }
-    class Request {
-        +Type : singleSelect
-        +Status : singleSelect
-        +Request Opened At : formula
-        +Processing Date : formula
-        +Street Address : String
-        +Notes : multilineText
-    }
-    class SocialServiceRequest {
-        +Type : singleSelect
-        +Status : singleSelect
-        +Internet Access : multipleSelects
-        +Roof Accessible : checkbox
-        +Processing Date : formula
-    }
-    class FormSubmission {
-        +ID : autoNumber
-        +Request Types : multipleSelects
-        +Furniture Items : multipleSelects
-        +Kitchen Items : multipleSelects
-        +Social Service Requests : multipleSelects
-        +Created At : createdTime
-    }
-    class Distro {
-        +Date Time : dateTime
-        +Location : String
-        +Duration : duration
-        +Appointments : String
-    }
-    class FulfilledRequestCount {
-        +Date : date
-        +[RequestType] : number
-    }
-
-    Household "1" --> "*" Request : has
-    Household "1" --> "*" SocialServiceRequest : has
-    FormSubmission "*" --> "1" Household : creates
-```
-
-### Intake Processing Sequence
+#### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Form
     participant FormSubmissions as Form Submissions
-    participant CleanAPI as /clean-record API
     participant Households
     participant Requests
     participant SocialServices as Social Service Requests
@@ -364,9 +260,6 @@ sequenceDiagram
     Form->>FormSubmissions: CREATE record<br/>Name, Phone, Email, Address<br/>Request Types, Languages
 
     Note over FormSubmissions: Automation triggers
-
-    FormSubmissions->>CleanAPI: Validate phone, email, address
-    CleanAPI-->>FormSubmissions: Formatted data + validation flags
 
     FormSubmissions->>Households: Find by Phone Number
     alt Household exists
@@ -388,7 +281,25 @@ sequenceDiagram
     Note over Requests,SocialServices: Request Opened At = CREATED_TIME()<br/>Processing Date = NULL (still Open)
 ```
 
-### Distribution Outreach Sequence
+---
+
+### 6.2 Distribution Outreach Flow (Happy Path)
+
+**Pre-condition:** Distribution scheduled, inventory checked
+
+1. **Admin** creates filtered view matching target population criteria:
+   - Available supplies match
+   - Language availability at distro
+   - Not recently attended
+2. **System** processes view via SMS function
+3. **System** sends text blast with language-specific templates
+4. **Recipients** respond to confirm (target: 240 people for 60 appointments)
+5. **Volunteer** manually marks confirmations
+6. **Recipients** attend distribution
+
+**Post-condition:** Appointments confirmed, ready for check-in
+
+#### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -403,7 +314,6 @@ sequenceDiagram
     Admin->>SMSFunction: Trigger with view_name,<br/>message_template, max_messages
 
     SMSFunction->>Database: Fetch records from view
-    SMSFunction->>SMSFunction: Deduplicate by Phone Number
 
     loop For each household (max 240)
         SMSFunction->>SMSProvider: Send SMS with [FIRST_NAME],<br/>[REQUEST_URL] (randomized)
@@ -417,49 +327,7 @@ sequenceDiagram
     Admin->>Households: UPDATE<br/>Appointment Date = distro date<br/>Appointment Time = slot<br/>Appointment Status = "Booked"
 ```
 
-### Check-In Flow Sequence
-
-```mermaid
-sequenceDiagram
-    participant Recipient
-    participant Volunteer
-    participant Households
-    participant Requests
-    participant FulfilledCount as Fulfilled Request Count
-
-    Recipient->>Volunteer: Arrives at distribution
-    Volunteer->>Households: LOOKUP by Phone Number
-    Households-->>Volunteer: Display Open Request Types
-
-    Volunteer->>Households: UPDATE<br/>Appointment Status = "Checked-in"
-
-    loop For each request to fulfill
-        Volunteer->>Requests: UPDATE<br/>Status = "Delivered"
-
-        Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days<br/>(+30 for Pots & Pans)
-    end
-
-    Volunteer->>Recipient: Direct to pickup area
-
-    Note over FulfilledCount: Daily aggregation updates<br/>[RequestType] counts
-```
-
-### No-Show Sequence
-
-```mermaid
-sequenceDiagram
-    participant Volunteer
-    participant Households
-
-    Note over Volunteer: End of distribution event
-
-    loop For each no-show household
-        Volunteer->>Households: UPDATE<br/>Appointment Status = "Missed"
-        Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
-    end
-```
-
-### Outreach Flowchart (Mermaid)
+#### Outreach Flowchart
 
 ```mermaid
 flowchart TD
@@ -509,7 +377,77 @@ flowchart TD
 
 ---
 
-## 8. Edge Cases and Concessions
+### 6.3 Check-In Flow (Happy Path)
+
+**Pre-condition:** Recipient confirmed appointment
+
+1. **Recipient** arrives at distribution
+2. **Volunteer** performs phone number lookup
+3. **System** displays recipient's requests
+4. **Volunteer** marks requests as fulfilled
+5. **Volunteer** directs recipient to pickup area
+
+**Post-condition:** Request closed
+
+#### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Recipient
+    participant Volunteer
+    participant Households
+    participant Requests
+    participant FulfilledCount as Fulfilled Request Count
+
+    Recipient->>Volunteer: Arrives at distribution
+    Volunteer->>Households: LOOKUP by Phone Number
+    Households-->>Volunteer: Display Open Request Types
+
+    Volunteer->>Households: UPDATE<br/>Appointment Status = "Checked-in"
+
+    loop For each request to fulfill
+        Volunteer->>Requests: UPDATE<br/>Status = "Delivered"
+
+        Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days<br/>(+30 for Pots & Pans)
+    end
+
+    Volunteer->>Recipient: Direct to pickup area
+
+    Note over FulfilledCount: Daily aggregation updates<br/>[RequestType] counts
+```
+
+#### No-Show Sequence
+
+```mermaid
+sequenceDiagram
+    participant Volunteer
+    participant Households
+
+    Note over Volunteer: End of distribution event
+
+    loop For each no-show household
+        Volunteer->>Households: UPDATE<br/>Appointment Status = "Missed"
+        Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
+    end
+```
+
+---
+
+### 6.4 Alternate / Error Paths
+
+| # | Condition | System Action | Suggested Handling |
+|---|-----------|---------------|-------------------|
+| A1 | Partial fulfillment (out of stock) | Keep request open | Do not mark as fulfilled to prevent deprioritization |
+| A2 | No-show at appointment | Mark as missed | Return to queue for next outreach cycle |
+| A3 | 1st missed appointment | Continue in queue | Follow outreach flowchart retry logic |
+| A4 | 2nd missed appointment | Email if available | Attempt email contact |
+| A5 | No response after all attempts | Mark as timeout | Close request |
+| A6 | Wrong number | Mark as invalid | Close request |
+| A7 | No longer needs goods | Mark complete | Close request |
+
+---
+
+## 7. Edge Cases and Concessions
 
 ### Data
 - **Edge case**: Multiple households sharing same phone number
@@ -529,7 +467,7 @@ flowchart TD
 
 ---
 
-## 9. Open Questions
+## 8. Open Questions
 
 1. **Volunteer Access**: What is the access revocation timeline and process?
 2. **Furniture Team Flow**: Need detailed workflow from furniture team (currently not taking new requests)
@@ -539,7 +477,7 @@ flowchart TD
 
 ---
 
-## 10. Glossary / References
+## 9. Glossary / References
 
 ### Terms
 - **BAM** - Bushwick Ayuda Mutua
