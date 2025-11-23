@@ -419,19 +419,176 @@ classDiagram
 sequenceDiagram
     participant User
     participant Form
-    participant IntakeTable
-    participant Processor
-    participant HouseholdTable
-    participant RequestTable
+    participant FormSubmissions as Form Submissions
+    participant CleanAPI as /clean-record API
+    participant Households
+    participant Requests
+    participant SocialServices as Social Service Requests
 
-    User->>Form: Submit request
-    Form->>IntakeTable: Store raw submission
-    Processor->>IntakeTable: Read new entries
-    Processor->>Processor: Normalize & hash PII
-    Processor->>HouseholdTable: Create/update household
-    Processor->>RequestTable: Create request(s)
-    Processor->>Processor: Check duplicates
-    Processor->>IntakeTable: Delete processed entry
+    User->>Form: Submit multi-language form
+    Form->>FormSubmissions: CREATE record<br/>Name, Phone, Email, Address<br/>Request Types, Languages
+
+    Note over FormSubmissions: Airtable Automation triggers
+
+    FormSubmissions->>CleanAPI: Validate phone, email, address
+    CleanAPI-->>FormSubmissions: Formatted data + validation flags
+
+    FormSubmissions->>Households: Find by Phone Number
+    alt Household exists
+        FormSubmissions->>Households: UPDATE<br/>Languages, Email (if changed)
+    else New household
+        FormSubmissions->>Households: CREATE<br/>Name, Phone Number, Email<br/>Languages, Invalid Phone Number?<br/>Int'l Phone Number?, Email Error
+    end
+
+    FormSubmissions->>Households: LINK Form Submissions field
+
+    loop For each Request Type selected
+        FormSubmissions->>Requests: CREATE<br/>Type, Status="Open"<br/>Household link<br/>Street Address (if furniture)
+    end
+
+    loop For each Social Service selected
+        FormSubmissions->>SocialServices: CREATE<br/>Type, Status="Open"<br/>Household link<br/>Internet Access, Roof Accessible?
+    end
+
+    Note over Requests,SocialServices: Request Opened At = CREATED_TIME()<br/>Processing Date = NULL (still Open)
+```
+
+### Distribution Outreach Sequence
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Airtable
+    participant DOFunction as send_dialpad_sms
+    participant Dialpad
+    participant Households
+    participant Recipient
+
+    Admin->>Airtable: Create filtered view<br/>(supplies match, language, not recent)
+    Admin->>DOFunction: Trigger with view_name,<br/>message_template, max_messages
+
+    DOFunction->>Airtable: Fetch records from view
+    DOFunction->>DOFunction: Deduplicate by Phone Number
+
+    loop For each household (max 240)
+        DOFunction->>Dialpad: Send SMS with [FIRST_NAME],<br/>[REQUEST_URL] (randomized)
+        Dialpad->>Recipient: SMS delivered
+        DOFunction->>Households: UPDATE<br/>Last Texted = TODAY()
+
+        Note over DOFunction: Rate limit: 30 msgs then 30s delay
+    end
+
+    Recipient-->>Admin: Confirms via text response
+    Admin->>Households: UPDATE<br/>Appointment Date = distro date<br/>Appointment Time = slot<br/>Appointment Status = "Booked"
+```
+
+### Check-In Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant Recipient
+    participant Volunteer
+    participant Households
+    participant Requests
+    participant FulfilledCount as Fulfilled Request Count
+
+    Recipient->>Volunteer: Arrives at distribution
+    Volunteer->>Households: LOOKUP by Phone Number
+    Households-->>Volunteer: Display Open Request Types
+
+    Volunteer->>Households: UPDATE<br/>Appointment Status = "Checked-in"
+
+    loop For each request to fulfill
+        Volunteer->>Requests: UPDATE<br/>Status = "Delivered"
+
+        Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days<br/>(+30 for Pots & Pans)
+    end
+
+    Volunteer->>Recipient: Direct to pickup area
+
+    Note over FulfilledCount: Daily aggregation updates<br/>[RequestType] counts
+```
+
+### No-Show / Timeout Sequence
+
+```mermaid
+sequenceDiagram
+    participant Volunteer
+    participant Households
+    participant Requests
+    participant DOFunction as timeout_eg_requests
+
+    Note over Volunteer: End of distribution event
+
+    loop For each no-show household
+        Volunteer->>Households: UPDATE<br/>Appointment Status = "Missed"
+        Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
+    end
+
+    Note over DOFunction: Daily cron or manual trigger
+
+    DOFunction->>Requests: Find records where<br/>newer fulfilled request exists
+
+    loop For each stale request
+        DOFunction->>Requests: UPDATE<br/>Status = "Timeout"
+
+        Note over Requests: Status Last Updated At = NOW()<br/>Processing Date = +14 days
+    end
+```
+
+### Request Deduplication Sequence
+
+```mermaid
+sequenceDiagram
+    participant Cron as Daily Cron (10:33 PM)
+    participant DOFunction as DedupeAirtableViews
+    participant Requests
+
+    Cron->>DOFunction: Trigger dedupe_views
+
+    loop For each of 23 views
+        DOFunction->>Requests: Fetch all records in view
+        DOFunction->>DOFunction: Group by Phone Number
+
+        loop For each phone with multiple requests
+            DOFunction->>DOFunction: Find earliest by Date Submitted
+
+            loop For each duplicate (not earliest)
+                DOFunction->>Requests: UPDATE<br/>Status = "Timeout"
+
+                Note over Requests: Marks as "[Type] Timeout"<br/>in status field
+            end
+        end
+    end
+```
+
+### Request Consolidation Sequence
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant DOFunction as consolidate_eg_requests
+    participant SourceView as Source View
+    participant TargetView as Target View
+    participant Requests
+
+    Admin->>DOFunction: Trigger with source_view,<br/>target_views, request_value
+
+    DOFunction->>SourceView: Fetch phone numbers
+    DOFunction->>TargetView: Fetch phone numbers
+    DOFunction->>DOFunction: Find matching phones
+
+    loop For each matching household
+        alt Target has request with Timeout
+            DOFunction->>Requests: UPDATE target<br/>Remove Timeout status
+        else Target missing request
+            DOFunction->>Requests: UPDATE target<br/>Add request type
+        end
+
+        DOFunction->>Requests: UPDATE source<br/>Status = "Timeout"
+    end
+
+    Note over Requests: Consolidates multiple requests<br/>to single household record
 ```
 
 ### Outreach State Machine
