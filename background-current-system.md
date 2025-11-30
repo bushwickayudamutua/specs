@@ -18,9 +18,11 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 - **Forms:** Fillout (multi-language)
 
 ### GitHub Repository
-- **Repo:** https://github.com/bushwickayudamutua/bam-automation
-- **Entry Point:** `functions/project.yml`
-- **API Docs:** https://airtable.com/appjIo54Z8MWrqhlI/api/docs
+- **Repo:** [github.com/bushwickayudamutua/bam-automation](https://github.com/bushwickayudamutua/bam-automation)
+- **Core Library:** [`/core`](https://github.com/bushwickayudamutua/bam-automation/tree/main/core) - Reusable Python utilities (Airtable, SMS, email clients)
+- **Functions:** [`/functions`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions) - Digital Ocean serverless functions
+- **API App:** [`/app`](https://github.com/bushwickayudamutua/bam-automation/tree/main/app) - FastAPI application for extended functionality
+- **Entry Point:** [`functions/project.yml`](https://github.com/bushwickayudamutua/bam-automation/blob/main/functions/project.yml)
 
 ---
 
@@ -36,23 +38,26 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ### Scheduled Jobs (Cron)
 
-| Function | Schedule | Purpose |
-|----------|----------|---------|
-| `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON |
-| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views |
-| `UpdateMailjetLists` | Daily | Syncs contacts to Mailjet email lists |
-| `SnapshotAirtableViews` | Daily | Backs up modified records to S3 |
+| Function | Schedule | Purpose | Source Code |
+|----------|----------|---------|-------------|
+| `UpdateWebsiteRequestData` | Hourly | Publishes open request counts to website JSON | [`website/update_request_data`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/website/update_request_data) |
+| `DedupeAirtableViews` | Daily (10:33 PM ET) | Deduplicates records by phone across 23 views | [`airtable/dedupe_views`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/dedupe_views) |
+| `UpdateMailjetLists` | Daily | Syncs contacts to Mailjet email lists | [`mailjet/update_lists`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/mailjet/update_lists) |
+| `SnapshotAirtableViews` | Daily | Backs up modified records to S3 | *(not found in current repo)* |
+
+**Cron Job Runners:**
+- [Hourly cron](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/cron/hourly) - Executes hourly scheduled functions
+- [Daily cron](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/cron/daily) - Executes daily scheduled functions
 
 ### Web-Triggered Functions
 
-| Function | Purpose |
-|----------|---------|
-| `send_dialpad_sms` | Sends SMS text blasts via Dialpad API |
-| `send_dialpad_sms` (V2) | SMS using new Household ORM model |
-| `consolidate_eg_requests` | Consolidates requests when household needs multiple items |
-| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled |
-| `update_field_value` | Bulk updates field for multiple phone numbers |
-| `/clean-record` API | Validates/normalizes phone, email, address |
+| Function | Purpose | Source Code |
+|----------|---------|-------------|
+| `send_dialpad_sms` | Sends SMS text blasts via Dialpad API | [`airtable/send_dialpad_sms`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/send_dialpad_sms) |
+| `consolidate_eg_requests` | Consolidates requests when household needs multiple items | [`airtable/consolidate_eg_requests`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/consolidate_eg_requests) |
+| `timeout_eg_requests` | Times out old unfulfilled requests when newer ones fulfilled | [`airtable/timeout_eg_requests`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/timeout_eg_requests) |
+| `update_field_value` | Bulk updates field for multiple phone numbers | [`airtable/update_field_value`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/update_field_value) |
+| `/clean-record` API | Validates/normalizes phone, email, address | [FastAPI app](https://github.com/bushwickayudamutua/bam-automation/tree/main/app) |
 
 ### External Service Integrations
 
@@ -69,98 +74,15 @@ Bushwick Ayuda Mutua (BAM) operates a mutual aid system that manages intake requ
 
 ## 4. Current Airtable Schema
 
-### Tables Overview
+**Note:** The current production Airtable schema is not documented here, as access to the production base is restricted. The V2 specification defines the new schema at [bam-mutual-aid-spec.md](./bam-mutual-aid-spec.md#4-data-schema).
 
-#### Households
-Primary table for recipient households.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Name | singleLineText | Household name |
-| ID | autoNumber | Unique identifier |
-| Phone Number | phoneNumber | Primary contact (unique key) |
-| Invalid Phone Number? | checkbox | Validation flag |
-| Int'l Phone Number? | checkbox | International number flag |
-| Email | email | Contact email |
-| Email Error | singleLineText | Validation error message |
-| Languages | multipleSelects | Preferred languages |
-| Notes | richText | Free-form notes |
-| Requests | multipleRecordLinks | Link to Requests table |
-| Open Request Types | multipleLookupValues | Lookup of open request types |
-| Delivered Request Types | multipleLookupValues | Lookup of delivered types |
-| Social Service Requests | multipleRecordLinks | Link to Social Service Requests |
-| Open Social Service Request Types | multipleLookupValues | Lookup of open SS types |
-| Created At | createdTime | Record creation time |
-| Updated At | lastModifiedTime | Last modification time |
-| Date of Oldest Fulfillable Request | rollup | Earliest open request date |
-| Legacy First/Last Date Submitted | date | Migration fields |
-| Form Submissions | multipleRecordLinks | Link to form submissions |
-| Appointment Date | date | Scheduled appointment |
-| Appointment Time | singleSelect | Time slot (11:00 AM, 11:30 AM) |
-| Appointment Status | singleSelect | Booked/Checked-in/Missed |
-| Last Texted | date | Last SMS outreach date |
-
-#### Requests
-Individual goods/service requests linked to households.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Label | formula | Display label (from Type) |
-| Type | singleSelect | Request type (trilingual) |
-| Household | multipleRecordLinks | Link to Households |
-| Status | singleSelect | Open/Timeout/Delivered |
-| Notes | multilineText | Request-specific notes |
-| Updated At | lastModifiedTime | Last modification |
-| Status Last Updated At | lastModifiedTime | When status changed |
-| Legacy Date Submitted | date | Migration field |
-| Request Opened At | formula | Effective open date |
-| Processing Date | formula | Auto-calculated expiry (14/30 days) |
-| Street Address | singleLineText | Delivery address |
-| City, State | singleLineText | Location |
-| Zip Code | number | Postal code |
-| Geocode | singleLineText | Geo coordinates |
-| Address | singleLineText | Formatted address |
-| Phone Number (from Household) | multipleLookupValues | Lookup |
-| Last texted (from Household) | multipleLookupValues | Lookup |
-
-**Processing Date Formula:**
-- Status changed to Delivered: +14 days (or +30 for Pots & Pans)
-- Status changed to Timeout: +14 days
-
-#### Social Service Requests
-Separate table for social services (different from goods).
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Label | formula | Display label |
-| Phone Number (from Household) | multipleLookupValues | Contact lookup |
-| Type | singleSelect | Service type (12 options) |
-| Status | singleSelect | Open/Timeout/Delivered |
-| Household | multipleRecordLinks | Link to Households |
-| Internet Access | multipleSelects | Current internet situation |
-| Roof Accessible? | checkbox | For internet installation |
-| Address fields | various | Location data |
-| Status Last Updated At | lastModifiedTime | Status change time |
-| Notes | multilineText | Service notes |
-| Request Opened At | formula | Effective open date |
-| Processing Date | formula | +14 days after status change |
-
-#### Distros
-Distribution event tracking.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Date & Time | dateTime | Event date/time |
-| Location | singleLineText | Venue |
-| Duration | duration | Event length |
-| Appointments | singleLineText | Appointment count/details |
-| Notes | multilineText | Event notes |
-
-#### Fulfilled Request Count
-Aggregated metrics per date (50+ columns for all request types).
-
-#### Assistance Request Form Submissions
-Raw form intake data from Fillout forms.
+**Known Tables (from automation code):**
+- Households (recipient households)
+- Requests (goods/services requests)
+- Social Service Requests
+- Distros (distribution events)
+- Fulfilled Request Count (metrics)
+- Assistance Request Form Submissions (intake data)
 
 ---
 
@@ -242,7 +164,22 @@ All request names stored in format:
 
 ## 10. Links & References
 
-- **Airtable API:** https://airtable.com/appjIo54Z8MWrqhlI/api/docs
-- **Automation repo:** https://github.com/bushwickayudamutua/bam-automation
-- **Entry point:** `functions/project.yml`
-- **SMS endpoint:** `/send_dialpad_sms`
+### Documentation
+- **V2 Specification:** [bam-mutual-aid-spec.md](./bam-mutual-aid-spec.md)
+- **Platform Research:** [platform-research-summary.md](./platform-research-summary.md)
+
+### Code Repositories
+- **Automation repo:** [github.com/bushwickayudamutua/bam-automation](https://github.com/bushwickayudamutua/bam-automation)
+- **Core utilities:** [`/core`](https://github.com/bushwickayudamutua/bam-automation/tree/main/core)
+- **Serverless functions:** [`/functions`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions)
+- **FastAPI app:** [`/app`](https://github.com/bushwickayudamutua/bam-automation/tree/main/app)
+- **Analysis notebooks:** [`/notebooks`](https://github.com/bushwickayudamutua/bam-automation/tree/main/notebooks)
+
+### Key Files
+- **Function configuration:** [`functions/project.yml`](https://github.com/bushwickayudamutua/bam-automation/blob/main/functions/project.yml)
+- **README:** [Setup & development docs](https://github.com/bushwickayudamutua/bam-automation/blob/main/README.md)
+
+### Function Endpoints
+- **SMS text blast:** [`send_dialpad_sms`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/airtable/send_dialpad_sms)
+- **Website data:** [`update_request_data`](https://github.com/bushwickayudamutua/bam-automation/tree/main/functions/packages/website/update_request_data)
+- **Record validation:** `/clean-record` API endpoint
