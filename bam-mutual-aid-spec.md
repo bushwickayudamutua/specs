@@ -60,7 +60,7 @@ The current BAM mutual aid system has technical debt, relies on manual intervent
 | Technical Functionality | Value | Tradeoffs |
 |------------------------|-------|-----------|
 | Request auto-expiration | Keeps queue fresh and relevant | May lose valid long-term requests |
-| Automated outreach retry logic | Consistent follow-up process | Requires 3x text, call, email sequence |
+| Timeout after 2nd missed appointment | Keeps queue accurate, reduces stale bookings | Recipient loses slot after two no-shows |
 
 ### Alternative Approaches
 
@@ -286,15 +286,14 @@ sequenceDiagram
 
 **Pre-condition:** Distribution scheduled, inventory checked
 
-1. **Admin** creates filtered view matching target population criteria:
+1. **Admin** reviews and approves the outreach list for this distro, filtering by:
    - Available supplies match
    - Language availability at distro
    - Not recently attended
-2. **System** processes view via SMS function
-3. **System** sends text blast with language-specific templates
-4. **Recipients** respond to confirm (target: 240 people for 60 appointments)
-5. **Volunteer** manually marks confirmations
-6. **Recipients** attend distribution
+2. **System** sends text blast to the outreach list with language-specific templates
+3. **Recipients** respond to confirm (target: 240 people for 60 appointments)
+4. **Volunteer** manually marks confirmations
+5. **Recipients** attend distribution
 
 **Post-condition:** Appointments confirmed, ready for check-in
 
@@ -309,10 +308,10 @@ sequenceDiagram
     participant Households
     participant Recipient
 
-    Admin->>Database: Create filtered view<br/>(supplies match, language, not recent)
-    Admin->>SMSFunction: Trigger with view_name,<br/>message_template, max_messages
+    Admin->>Database: Review & approve outreach list<br/>(supplies match, language, not recent)
+    Admin->>SMSFunction: Trigger with outreach_list,<br/>message_template, max_messages
 
-    SMSFunction->>Database: Fetch records from view
+    SMSFunction->>Database: Fetch records from outreach list
 
     loop For each household (max 240)
         SMSFunction->>SMSProvider: Send SMS with [FIRST_NAME],<br/>[REQUEST_URL] (randomized)
@@ -335,11 +334,7 @@ flowchart TD
     TextBlast --> Response1{Response?}
 
     Response1 -->|Yes, confirming<br/>they can come| Confirm[Volunteer responds<br/>via text & confirms appt<br/>during outreach shift]
-    Response1 -->|No| Retry1[System texts again<br/>at least 3x total]
-
-    Retry1 --> Response2{Response?}
-    Response2 -->|Yes| Confirm
-    Response2 -->|No| PhoneCall[Volunteer calls<br/>to offer an appointment]
+    Response1 -->|No response| PhoneCall[Volunteer calls<br/>to offer an appointment]
 
     PhoneCall --> CallResponse{Response?}
     CallResponse -->|Confirms| Confirm
@@ -350,22 +345,13 @@ flowchart TD
 
     RetryCall --> RetryResponse{Response?}
     RetryResponse -->|Confirms| Confirm
-    RetryResponse -->|No answer<br/>voicemail<br/># not in service| EmailCheck[Email offering appt<br/>times. Response<br/>within one week?]
+    RetryResponse -->|No answer<br/>voicemail<br/># not in service| Timeout2
 
-    EmailCheck --> EmailResponse{Response?}
-    EmailResponse -->|Yes| HasEmail{Is there an<br/>email?}
-    EmailResponse -->|No| Timeout2
-    EmailResponse -->|Yes but no longer<br/>in need of goods/services| Timeout2
-
-    HasEmail -->|Yes| Confirm
-    HasEmail -->|No| Timeout2
-
-    Confirm --> Appt1{1st missed<br/>appointment}
-    Appt1 -->|Appt attended,<br/>goods/service<br/>registration<br/>received| Delivered([Goods/services<br/>marked 'delivered'<br/>& request is closed])
-
-    Appt1 -->|2nd missed<br/>appointment| Appt2Check{Response?}
-    Appt2Check -->|No| Timeout2
-    Appt2Check -->|Yes but no longer<br/>in need of goods/services| Timeout2
+    Confirm --> Appt1{Appointment<br/>attended?}
+    Appt1 -->|Yes — goods/service<br/>received| Delivered([Goods/services<br/>marked 'delivered'<br/>& request is closed])
+    Appt1 -->|1st missed| Queue[Return to queue<br/>for next outreach cycle]
+    Queue --> Appt2{2nd missed<br/>appointment?}
+    Appt2 -->|Yes| Timeout2
 
     style Start fill:#f9f9f9,stroke:#333
     style Delivered fill:#90EE90,stroke:#333
@@ -421,88 +407,32 @@ sequenceDiagram
 sequenceDiagram
     participant Volunteer
     participant Households
+    participant Requests
 
     Note over Volunteer: End of distribution event
 
     loop For each no-show household
         Volunteer->>Households: UPDATE<br/>Appointment Status = "Missed"
         Volunteer->>Households: CLEAR<br/>Appointment Date, Appointment Time
+
+        alt 2nd missed appointment (Missed count = 2)
+            Volunteer->>Requests: UPDATE<br/>Status = "Timeout"
+        end
     end
 ```
 
 ---
 
-### 6.4 Delivery / Transport Flow
-
-**Pre-condition:** Items need to be transported between locations
-
-1. **Coordinator** sends message to BAM group requesting transport help
-2. **Volunteer** shows up at pickup location with vehicle
-3. **Team** loads items into vehicle
-4. **Volunteer** drives to destination
-5. **Team** unloads items at destination
-
-**Post-condition:** Items transported to destination
-
-**Note:** This flow is primarily text-based coordination through group messaging.
-
----
-
-### 6.5 Donate / Volunteer Flow
-
-**Pre-condition:** Community member wants to donate or volunteer
-
-1. **User** submits donate/volunteer form
-2. **System** records submission
-3. **Admin** reviews and follows up as needed
-
-**Post-condition:** Donation/volunteer interest recorded
-
-**Note:** Furniture donations have a separate flow handled by the furniture team.
-
----
-
-### 6.6 Post-Distro Inventory Flow
-
-**Pre-condition:** Distribution event completed
-
-1. **Volunteer** takes inventory of remaining supplies
-2. **Volunteer** sends inventory report to group (text-based)
-3. **Admin** reviews inventory levels for next distro planning
-
-**Post-condition:** Inventory levels communicated to team
-
-**Example Report Format:**
-```
-POST DISTRO INVENTORY [DATE]
-Basement inventory:
-Buyer: [Name]
-Inventory: [Name]
-
-Diapers:
-1: X boxes
-2: X boxes
-...
-
-Pads: X packs
-Soap: X boxes
-School Supplies: X boxes
-Kitchen: description
-```
-
----
-
-### 6.7 Alternate / Error Paths
+### 6.4 Alternate / Error Paths
 
 | # | Condition | System Action | Suggested Handling |
 |---|-----------|---------------|-------------------|
 | A1 | Partial fulfillment (out of stock) | Keep request open | Do not mark as fulfilled to prevent deprioritization |
-| A2 | No-show at appointment | Mark as missed | Return to queue for next outreach cycle |
-| A3 | 1st missed appointment | Continue in queue | Follow outreach flowchart retry logic |
-| A4 | 2nd missed appointment | Email if available | Attempt email contact |
-| A5 | No response after all attempts | Mark as timeout | Close request |
-| A6 | Wrong number | Mark as invalid | Close request |
-| A7 | No longer needs goods | Mark complete | Close request |
+| A2 | 1st missed appointment | Mark as missed | Return to queue for next outreach cycle |
+| A3 | 2nd missed appointment | Mark as timeout | Close request |
+| A4 | No response after phone call attempts | Mark as timeout | Close request |
+| A5 | Wrong number | Mark as invalid | Close request |
+| A6 | No longer needs goods | Mark complete | Close request |
 
 ---
 
@@ -517,7 +447,7 @@ Kitchen: description
 - **Exception**: Pots/pans get 30-day window due to availability constraints
 
 ### Outreach
-- **Concession**: Text blast targeting is not fully automated - requires manual view creation
+- **Concession**: Outreach list is manually curated by admin — automated list generation is post-MVP
 - **Edge case**: Language matching between volunteers and recipients is manual
 
 ### Fulfillment
@@ -536,278 +466,7 @@ Kitchen: description
 
 ---
 
-## 9. Feature Suggestions
-
-The following features could improve system efficiency, user experience, and operational scalability. These are suggestions for future consideration, not requirements for the current V2 implementation.
-
-### 9.1 Automation & Efficiency
-
-#### Automated Outreach Targeting
-**Problem:** Admins manually create filtered views for each text blast.
-**Suggestion:** Auto-generate target lists based on:
-- Current inventory levels
-- Volunteer language availability for upcoming distro
-- Recipients who haven't attended in X days
-- Request age prioritization
-
-**Value:** Reduces admin prep time, ensures consistent targeting criteria, minimizes human error.
-
-#### Automated Appointment Booking
-**Problem:** Volunteers manually respond to each confirmation and update Airtable.
-**Suggestion:** Self-service booking system where recipients:
-- Receive text with available time slots
-- Reply with slot number to auto-book
-- Get confirmation with appointment details
-
-**Value:** Reduces volunteer workload during outreach shifts, faster booking turnaround.
-
-#### Smart Follow-Up Sequences
-**Problem:** 3x text, 3x call, email sequence requires manual tracking.
-**Suggestion:** Automated escalation workflow:
-- Auto-send follow-up texts on schedule
-- Flag for phone call after text failures
-- Auto-email after call failures
-- Track attempts per household
-
-**Value:** Consistent follow-up without volunteer tracking burden.
-
-#### Language-Aware Routing
-**Problem:** Manual matching of volunteer languages to recipient needs.
-**Suggestion:** System matches:
-- Volunteer language skills to recipient preferences
-- Auto-assign outreach based on language match
-- Alert when no language match available
-
-**Value:** Better recipient experience, more efficient volunteer utilization.
-
----
-
-### 9.2 Inventory Management
-
-#### Real-Time Inventory Tracking
-**Problem:** Post-distro inventory is informal text reporting.
-**Suggestion:** Digital inventory system with:
-- Pre-distro stock counts
-- Real-time deduction during check-in
-- Low-stock alerts
-- Reorder suggestions
-
-**Value:** Better distro planning, prevents over-promising items not in stock.
-
-#### Inventory-Aware Request Matching
-**Problem:** Admins manually match available supplies to request types.
-**Suggestion:** System auto-filters outreach to:
-- Only contact households requesting available items
-- Prioritize items with excess inventory
-- Defer low-stock item requests
-
-**Value:** Higher fulfillment rate per distro, reduces partial fulfillments.
-
----
-
-### 9.3 Recipient Experience
-
-#### Request Status Portal
-**Problem:** Recipients have no visibility into request status.
-**Suggestion:** Simple web/SMS interface showing:
-- Current request status (Open/Scheduled/Fulfilled)
-- Position in queue
-- Estimated wait time
-- Next distro dates
-
-**Value:** Reduces inquiry volume, builds trust through transparency.
-
-#### Appointment Reminders
-**Problem:** No automated reminders before appointments.
-**Suggestion:** Send reminders:
-- 24 hours before appointment
-- 2 hours before appointment
-- Include location, time, what to bring
-
-**Value:** Reduces no-show rate, improves distro efficiency.
-
-#### Multi-Channel Notifications
-**Problem:** SMS-only communication limits reach.
-**Suggestion:** Support multiple channels:
-- SMS (primary)
-- Email (backup)
-- WhatsApp (for international numbers)
-- Push notifications (future app)
-
-**Value:** Better reach, accommodates communication preferences.
-
-#### Configurable Expiration Windows
-**Problem:** Fixed 14-day expiration may not suit all request types.
-**Suggestion:** Per-request-type expiration:
-- Urgent items (diapers, pads): 7 days
-- Standard goods: 14 days
-- Furniture/large items: 30-60 days
-- Social services: 30 days
-
-**Value:** Better matches urgency to item availability patterns.
-
----
-
-### 9.4 Volunteer Management
-
-#### Shift Scheduling System
-**Problem:** Manual coordination for distro staffing.
-**Suggestion:** Volunteer scheduling with:
-- Available shift slots per distro
-- Self-service sign-up
-- Language skill matching
-- Automated reminders
-- No-show tracking
-
-**Value:** Easier coordination, better language coverage.
-
-#### Volunteer Onboarding Workflow
-**Problem:** Onboarding process unclear.
-**Suggestion:** Structured onboarding:
-- Automated welcome sequence
-- Training module completion tracking
-- Shadowing assignment
-- Probation period management
-- Skill certification
-
-**Value:** Consistent onboarding, faster time-to-productivity.
-
-#### Access Management
-**Problem:** Volunteer access revocation timeline unclear.
-**Suggestion:** Automated access lifecycle:
-- Inactivity alerts (30/60/90 days)
-- Auto-revoke after X days inactive
-- Re-onboarding for returning volunteers
-- Audit trail for access changes
-
-**Value:** Security, compliance, clean volunteer roster.
-
----
-
-### 9.5 Data Quality & Privacy
-
-#### Phone Number Validation
-**Problem:** Invalid/international numbers cause outreach failures.
-**Suggestion:** At intake:
-- Format validation
-- Carrier lookup
-- International number flagging
-- Duplicate detection
-
-**Value:** Cleaner data, fewer failed outreach attempts.
-
-#### Household Deduplication Tools
-**Problem:** Multiple phone numbers create duplicate households.
-**Suggestion:** Admin tools for:
-- Duplicate detection reports
-- Merge household records
-- Link multiple phones to one household
-- Audit trail for merges
-
-**Value:** Accurate household counts, prevents double-fulfillment.
-
-#### Configurable Data Retention
-**Problem:** No clear policy for old data.
-**Suggestion:** Automated data lifecycle:
-- Archive fulfilled requests after X days
-- Anonymize PII after retention period
-- Configurable per data type
-- Compliance reporting
-
-**Value:** Privacy compliance, database performance.
-
----
-
-### 9.6 Reporting & Analytics
-
-#### Operations Dashboard
-**Problem:** Metrics require manual aggregation.
-**Suggestion:** Real-time dashboard showing:
-- Open requests by type
-- Fulfillment rate trends
-- No-show rates
-- Inventory levels
-- Volunteer activity
-
-**Value:** Data-driven decisions, early problem detection.
-
-#### Distribution Planning Reports
-**Problem:** Manual analysis for distro planning.
-**Suggestion:** Auto-generated reports:
-- Optimal target list size for capacity
-- Language coverage gaps
-- Geographic distribution
-- Historical attendance patterns
-
-**Value:** Better planning, improved efficiency.
-
-#### Impact Reporting
-**Problem:** Limited visibility into program impact.
-**Suggestion:** Generate reports for:
-- Households served over time
-- Requests fulfilled by type
-- Average time-to-fulfillment
-- Community reach by neighborhood
-
-**Value:** Fundraising support, stakeholder communication.
-
----
-
-### 9.7 Integration & Infrastructure
-
-#### API for External Systems
-**Problem:** Limited integration capabilities.
-**Suggestion:** REST API supporting:
-- Read/write for all tables
-- Webhook subscriptions
-- Rate limiting
-- Authentication/authorization
-
-**Value:** Enables partner integrations, custom tooling.
-
-#### Mobile Check-In App
-**Problem:** Airtable interface not optimized for mobile.
-**Suggestion:** Dedicated mobile app for:
-- Phone number lookup
-- Request display
-- Quick fulfillment marking
-- Offline support
-
-**Value:** Faster check-ins, works in low-connectivity venues.
-
-#### Backup & Disaster Recovery
-**Problem:** Single point of failure in current system.
-**Suggestion:** Implement:
-- Daily automated backups
-- Point-in-time recovery
-- Failover procedures
-- Recovery testing schedule
-
-**Value:** Data protection, operational continuity.
-
----
-
-### 9.8 Priority Recommendations
-
-Based on impact and feasibility, suggested implementation priority:
-
-| Priority | Feature | Impact | Effort |
-|----------|---------|--------|--------|
-| **P0** | Appointment Reminders | High - reduces no-shows | Low |
-| **P0** | Phone Number Validation | High - improves data quality | Low |
-| **P1** | Automated Outreach Targeting | High - saves admin time | Medium |
-| **P1** | Real-Time Inventory Tracking | High - better planning | Medium |
-| **P1** | Operations Dashboard | High - visibility | Medium |
-| **P2** | Automated Appointment Booking | Medium - reduces volunteer load | Medium |
-| **P2** | Volunteer Shift Scheduling | Medium - easier coordination | Medium |
-| **P2** | Household Deduplication Tools | Medium - data quality | Medium |
-| **P3** | Request Status Portal | Medium - recipient experience | High |
-| **P3** | Mobile Check-In App | Medium - faster check-ins | High |
-| **P3** | Language-Aware Routing | Medium - better matching | High |
-
----
-
-## 10. Glossary / References
+## 9. Glossary / References
 
 ### Terms
 - **BAM** - Bushwick Ayuda Mutua
@@ -828,3 +487,5 @@ Based on impact and feasibility, suggested implementation priority:
 
 ### Links
 - **Current System Background:** [background-current-system.md](./background-current-system.md)
+- **Appendix (Post-MVP Flows & Feature Suggestions):** [appendix.md](./appendix.md)
+
