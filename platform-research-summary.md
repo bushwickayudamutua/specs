@@ -29,7 +29,7 @@ After exhaustive research of existing mutual aid software solutions, **no platfo
 
 **What makes BAM different:**
 1. **Household-based tracking** with phone number as unique key (not individual-based)
-2. **Multi-language intake** (6 languages: EN, ES, zh-hant, zh-hans, FR, AR)
+2. **Multi-language intake** (11 languages: EN, ES, zh-hant, zh-hans, FR, AR, Quechua, Portuguese, Haitian Creole, Tagalog, Toishanese)
 3. **Appointment-based distributions** with 25% confirmation rate planning
 4. **Request type-specific auto-expiration** (14 vs 30 days)
 5. **SMS text blast outreach** to 240 households per distribution

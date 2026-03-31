@@ -350,8 +350,8 @@ flowchart TD
     Confirm --> Appt1{Appointment<br/>attended?}
     Appt1 -->|Yes — goods/service<br/>received| Delivered([Goods/services<br/>marked 'delivered'<br/>& request is closed])
     Appt1 -->|1st missed| Queue[Return to queue<br/>for next outreach cycle]
-    Queue --> Appt2{2nd missed<br/>appointment?}
-    Appt2 -->|Yes| Timeout2
+    Queue --> TextBlast
+    Queue -.->|If 2nd missed| Timeout2
 
     style Start fill:#f9f9f9,stroke:#333
     style Delivered fill:#90EE90,stroke:#333
